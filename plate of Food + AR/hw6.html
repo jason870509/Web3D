@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='build/three.min.js'></script>
+<script src="build/stats.min.js"></script>
+<!-- ar.js -->
+<script src="build/ar.js"></script>
+<!--<script>THREEx.ArToolkitContext.baseURL = '../'</script>-->
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+<div style='font-size:2em;position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	<a href="https://github.com/jeromeetienne/AR.js/" target="_blank">AR.js</a> - three.js mobile performance
+	<br/>
+	Initialize both markers, but show them in controlled fashion
+</div>
+
+<script>
+
+// global variables
+var renderer, scene, camera;
+var stats;
+var markerKanji, markerHiro;
+var arToolKitSource, arToolKitContext;
+
+var raycaster, pickables;
+var showHiro = true;
+var _iOSDevice;
+
+init();
+animate();
+
+function init() {
+	// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+	let _iOSDevice = !!navigator.platform.match(/iPhone|iPod|iPad/);
+
+	console.log ('iOS: ' + _iOSDevice)
+
+
+	// init renderer
+	renderer	= new THREE.WebGLRenderer({
+		// antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	// renderer.setPixelRatio( 1/2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// init scene and camera
+	scene	= new THREE.Scene();
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Initialize a basic camera
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// Create a camera
+	camera = new THREE.Camera();
+	scene.add(camera);
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+
+	arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam 
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',		
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',		
+	})
+
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+	
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()	
+		arToolkitSource.copySizeTo(renderer.domElement)	
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
+		}	
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+	
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + '../data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	markerKanji = addMarkerKanji();
+	scene.add (markerKanji);
+	markerHiro = addMarkerHiro();
+	scene.add (markerHiro); // hide at first
+	
+	
+	stats = new Stats();
+	document.body.appendChild( stats.dom );
+
+	////////////////////////////////////////////////////////
+	// picker
+	if (_iOSDevice)
+		window.addEventListener('touchstart', onTouchStart, false) 
+	else
+		window.addEventListener ('mousedown', onMouseDown, false);
+	raycaster = new THREE.Raycaster();
+	pickables = [markerKanji];	
+
+
+}
+
+function onTouchStart (event) {
+	console.log ('in touch start')
+
+   if (event.touches.length == 1) {
+        
+		event.preventDefault();
+		let ndcX = ( event.touches[0].pageX / window.innerWidth ) * 2 - 1;
+		let ndcY = - ( event.touches[0].pageY / window.innerHeight ) * 2 + 1;
+	
+		doToggleHiro (ndcX, ndcY);		
+		
+	}	
+}	
+	
+function doToggleHiro (ndcX, ndcY) {
+  	//raycaster.ray.origin.setFromMatrixPosition( camera.matrixWorld );
+	raycaster.ray.origin.set (0,0,0)
+	raycaster.ray.direction.set( ndcX, ndcY, 0.5 ).unproject( camera ).sub( raycaster.ray.origin ).normalize();
+			
+  	var intersects = raycaster.intersectObjects(pickables, true);
+  	if (intersects.length > 0) {
+  		console.log ('toggle showHiro');
+ 	
+ 		showHiro = !showHiro;
+  			
+	}
+	if (showHiro) {
+		scene.add (markerHiro)
+	} else {
+		scene.remove (markerHiro)
+	}
+
+}
+
+function onMouseDown (event) {
+	event.preventDefault();
+  	let ndcX = (event.clientX / window.innerWidth) * 2 - 1;
+  	let ndcY = -(event.clientY / window.innerHeight) * 2 + 1;
+
+	doToggleHiro (ndcX, ndcY)  	
+}
+
+	
+function addMarkerKanji () {
+	let markerRootKanji = new THREE.Group();
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRootKanji, {
+		type : 'pattern',
+		 patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.kanji'
+	})
+
+	/*var geometry	= new THREE.PlaneGeometry(1,1);
+		
+	let loader = new THREE.TextureLoader();
+	loader.setCrossOrigin('')
+	let texture = loader.load( 'https://i.imgur.com/J0RenHB.png' );
+	//let texture = loader.load( 'https://i.imgur.com/oRYPJ5X.png' );
+	
+	let material = new THREE.MeshBasicMaterial( { 
+		map: texture,
+		transparent: true,
+		side: THREE.DoubleSide
+		} );
+
+	let mesh	= new THREE.Mesh( geometry, material );
+	mesh.position.y	= geometry.parameters.height/2
+	//mesh.position.z = 0.5;*/
+let loader = new THREE.TextureLoader();
+  loader.crossOrigin = '';
+  airplane = new THREE.Object3D();
+  texture = loader.load('https://i.imgur.com/qr8kAad.png');
+
+  var box = new THREE.Mesh(new THREE.BoxGeometry(3/7, 2/7, 7/7), new THREE.MeshBasicMaterial({
+    color: 0x555555, 
+    map: texture
+  }));
+  airplane.add(box)
+  //////////////////////////////////////////boxLinks
+  let boxLinks = []
+  for (i = 0; i < 4; i++) {
+    boxLinks[i] = new THREE.Mesh(new THREE.BoxGeometry(3/7, 1/7, 0.2/7), new THREE.MeshBasicMaterial({
+      color: 0x333333,
+      map: texture
+    }));
+    airplane.add(boxLinks[i])
+  }
+  boxLinks[0].position.set(-2.5/7, 0, 3.0/7)
+  boxLinks[0].rotation.y = Math.PI / 4
+  boxLinks[1].position.set(-2.5/7, 0, -3.0/7)
+  boxLinks[1].rotation.y = -Math.PI / 4
+  boxLinks[2].position.set(2.5/7, 0, -3.0/7)
+  boxLinks[2].rotation.y = Math.PI / 4
+  boxLinks[3].position.set(2.5/7, 0, 3.0/7)
+  boxLinks[3].rotation.y = -Math.PI / 4
+  //////////////////////////////////////////motorSides
+  let motorSides = []
+  material = new THREE.MeshBasicMaterial({
+    color: 0x333333,
+    side: THREE.DoubleSide,
+    map: texture
+  })
+  motorSides[0] = new THREE.Mesh(new THREE.CylinderGeometry(4/7, 4/7, 0.5/7, 50, 2, true, 4, 2.5), material)
+  motorSides[0].position.set(-4/7, 1/7, 4/7)
+  motorSides[1] = new THREE.Mesh(new THREE.CylinderGeometry(4/7, 4/7, 0.5/7, 50, 2, true, 2.8, 2.5), material)
+  motorSides[1].position.set(-4/7, 1/7, -4/7)
+  motorSides[2] = new THREE.Mesh(new THREE.CylinderGeometry(4/7, 4/7, 0.5/7, 50, 2, true, 1, 2.5), material)
+  motorSides[2].position.set(4/7, 1/7, -4/7)
+  motorSides[3] = new THREE.Mesh(new THREE.CylinderGeometry(4/7, 4/7, 0.5/7, 50, 2, true, -0.5, 2.5), material)
+  motorSides[3].position.set(4/7, 1/7, 4/7)
+  for (i = 0; i < 4; i++) {
+    airplane.add(motorSides[i])
+  }
+  //////////////////////////////////////////motorCenters
+  let motorCenters = [], motorCenters2 = []
+  for (i = 0; i < 4; i++) {
+    motorCenters[i] = new THREE.Mesh(new THREE.CylinderGeometry(0.4/7, 0.4/7, 3.5/7, 50), new THREE.MeshBasicMaterial({
+      color: 0xCCCCCC, 
+      map: texture
+    }));
+    airplane.add(motorCenters[i])
+  }
+  motorCenters[0].position.set(-4/7, 0, 4/7)
+  motorCenters[1].position.set(-4/7, 0, -4/7)
+  motorCenters[2].position.set(4/7, 0, -4/7)
+  motorCenters[3].position.set(4/7, 0, 4/7)
+  for (i = 0; i < 4; i++) {
+    motorCenters2[i] = new THREE.Mesh(new THREE.CylinderGeometry(0.5/7, 0.5/7, 3/7, 50, 2, true), new THREE.MeshBasicMaterial({
+      color: 0x333333, 
+      map: texture
+    }));
+    airplane.add(motorCenters2[i])
+  }
+  motorCenters2[0].position.set(-4/7, -0.5/7, 4/7)
+  motorCenters2[1].position.set(-4/7, -0.5/7, -4/7)
+  motorCenters2[2].position.set(4/7, -0.5/7, -4/7)
+  motorCenters2[3].position.set(4/7, -0.5/7, 4/7)
+  //////////////////////////////////////////motorLinks
+  let motorLinks = []
+  for (i = 0; i < 8; i++) {
+    motorLinks[i] = new THREE.Mesh(new THREE.BoxGeometry(4.5/7, 0.4/7, 0.2/7), new THREE.MeshBasicMaterial({
+      color: 0x333333,
+      map: texture
+    }));
+    airplane.add(motorLinks[i])
+  }
+  motorLinks[0].position.set(-6/7, 0, 4/7)
+  motorLinks[1].position.set(-6/7, 0, -4/7)
+  motorLinks[2].position.set(6/7, 0, -4/7)
+  motorLinks[3].position.set(6/7, 0, 4/7)
+  motorLinks[0].rotation.z = -Math.PI / 6
+  motorLinks[1].rotation.z = -Math.PI / 6
+  motorLinks[2].rotation.z = Math.PI / 6
+  motorLinks[3].rotation.z = Math.PI / 6
+  motorLinks[4].position.set(-4/7, 0, 6/7)
+  motorLinks[4].rotation.y = -Math.PI / 2
+  motorLinks[4].rotation.x = -Math.PI / 6
+  motorLinks[5].position.set(-4/7, 0, -6/7)
+  motorLinks[5].rotation.y = -Math.PI / 2
+  motorLinks[5].rotation.x = Math.PI / 6
+  motorLinks[6].position.set(4/7, 0, -6/7)
+  motorLinks[6].rotation.y = -Math.PI / 2
+  motorLinks[6].rotation.x = Math.PI / 6
+  motorLinks[7].position.set(4/7, 0, 6/7)
+  motorLinks[7].rotation.y = -Math.PI / 2
+  motorLinks[7].rotation.x = -Math.PI / 6
+  //////////////////////////////////////////motors
+  var motors = []
+  motorTexture = loader.load('https://i.imgur.com/yCho2gY.png');
+  for(i=0;i<4;i++){
+    motors[i] = new THREE.Mesh(new THREE.PlaneGeometry(7.5/7, 1/7), new THREE.MeshPhongMaterial({map:motorTexture,transparent: true, side:THREE.DoubleSide}))
+    motors[i].rotation.x = -Math.PI / 2
+    airplane.add(motors[i])	
+  }
+  motors[0].position.set(-4/7, 1/7, 4/7)
+  motors[1].position.set(-4/7, 1/7, -4/7)
+  motors[2].position.set(4/7, 1/7, -4/7)
+  motors[3].position.set(4/7, 1/7, 4/7)
+  //scene.add(airplane)	
+	markerRootKanji.add (airplane);
+airplane.position.y	= box.geometry.parameters.height/2
+/*let cube = new THREE.Mesh (new THREE.BoxGeometry (3,20,1), new THREE.MeshNormalMaterial())
+markerRootKanji.add (cube)
+cube.position.z = -5;
+//cube.rotation.y = Math.PI/3*/
+
+	/// add gridhelper
+	var gridXZ = new THREE.GridHelper(1,10);
+	//markerRootKanji.add (gridXZ);
+	
+	return markerRootKanji;
+}
+
+function addMarkerHiro(){
+	let markerRoot = new THREE.Group()
+
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.hiro'
+	})
+
+	// add a torus knot	
+	var geometry	= new THREE.TorusKnotGeometry(0.3,0.1,64,16);
+	var material	= new THREE.MeshNormalMaterial();
+	var mesh	= new THREE.Mesh( geometry, material );
+	mesh.position.y	= 0.5
+	
+	markerRoot.add (mesh);
+		
+	return markerRoot;
+}	
+
+
+function animate() {
+	requestAnimationFrame (animate);
+	
+	if( arToolkitSource.ready === false )	return
+	arToolkitContext.update( arToolkitSource.domElement )
+	
+	if (showHiro) {
+		markerHiro.children[0].rotation.x += 0.1;
+		
+	}
+	console.log(showHiro)
+	renderer.render (scene, camera);
+	stats.update();
+	
+	// billboard of Hulk
+	// camera at eye coord: (0,0,0)
+	// corresponding marker coordinate:
+	let p0 = new THREE.Vector3 (0,0,0)
+	let mw = new THREE.Matrix4();		
+	p0.applyMatrix4 (mw.getInverse(markerKanji.matrixWorld));
+
+	p0.y = 0;
+	let front = new THREE.Vector3(0,0,1);
+	let angle = p0.angleTo (front);
+	let axis = new THREE.Vector3();
+	axis.crossVectors ( front, p0 ).normalize();
+	/*if (axis.y > 0)  // 0, 1, 0
+		markerKanji.children[0].rotation.y = angle;
+	else 
+		markerKanji.children[0].rotation.y = -angle;*/
+	markerKanji.children[0].rotation.y += 0.1
+	markerKanji.children[0].position.y += 0.01
+	
+}
+
+</script></body>
+

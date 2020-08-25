@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+#info {
+  position: absolute;
+  top: 2%;
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  color: #ffff00
+}
+
+body {
+  overflow: hidden;
+}
+
+
+
+
+</style>
+</head>
+
+<body> 
+	
+ <div id="info"> Hw2_Gallery
+	<a href="img/2D.jpeg">2D design layout</a>
+  <br>
+  
+  <button id = "toggle">camera</button>
+  <button id="tView" style="width:20%">Light OFF</button>
+  <br>
+<input type=range min=0 max=2 step=0.1 id='light1'> 
+  <button id = "changeLight">light1</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/109/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js">
+
+
+</script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+
+
+<script>
+var useCamera1 = false;
+var lightsOff = false;
+var spotLights = [], lamps = [], meshs = [], sCam = [], toggleCameras = [];
+var keys = [
+  [0, 0], [0.4, 0.6], [0.5, 0.6], [0.9, 0], [1, 0]
+];
+var T = 4;
+var clock = new THREE.Clock();
+var ts = clock.getElapsedTime();
+var safety = 0;
+var lightNum = 0
+$("#toggle").click(function() {
+	safety += 1;
+  if(safety > 2) safety = 0;
+  if(safety == 0) $("#toggle").text('camera')
+	else $("#toggle").text('camera'+safety)
+});
+
+$('#light1').change ( function() {
+	//console.log ( $(this).val() );
+  spotLights[lightNum].spotLight.intensity = $(this).val();
+});
+
+$('#changeLight').click ( function() {
+	lightNum += 1;
+  if(lightNum > lamps.length-1)lightNum = 0
+  $('#changeLight').text('light'+(lightNum+1))
+});
+
+$('#tView').click(function() {
+//  toggleCamera();
+	lightsOff = !lightsOff;
+  console.log(lightsOff)
+  if (lightsOff) {
+  	$('#tView').text('Light ON')
+    spotLights.forEach(function(spotLight){
+    	spotLight.spotLight.intensity = 0;
+    });
+
+  } else {
+  	$('#tView').text ('Light OFF')
+    spotLights.forEach(function(spotLight){
+    	spotLight.spotLight.intensity = 1;
+    }); 
+  }
+});
+class Lamp{
+	constructor(x, y, z){
+    this.lamp = new THREE.Object3D();  
+    var lampbody = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 30), new THREE.MeshBasicMaterial({color:0x917f8f}));
+    this.lamp.add(lampbody);
+    lampbody.position.set(0, 0, 15);
+    lampbody.rotation.x = Math.PI / 2;
+    this.lamp.position.set(x, y, z);  // fix to a point on ceiling
+    scene.add(this.lamp);
+  }
+}
+class Mesh{
+	constructor(x, y, z){
+    this.mesh = new THREE.Mesh(new THREE.SphereGeometry(10, 20, 20), new THREE.MeshNormalMaterial({visible:false}));
+    this.mesh.position.set(x, y, z)
+  	scene.add(this.mesh)
+  }
+}
+class SpotLight{
+	constructor(){
+  	this.spotLight = new THREE.SpotLight(0xffffff);
+    scene.add(this.spotLight);
+    this.spotLight.angle = 0.6;
+    this.spotLight.penumbra = 0.5;
+    this.spotLight.distance = 400;
+    this.spotLight.decay = 1;
+
+    //spotLightHelper = new THREE.SpotLightHelper(spotLight);
+  }
+}
+class Camera{
+	constructor(x, y, z, ry, rx){
+  	this.cameraObj = new THREE.Object3D();
+    //cameraObj.add (new THREE.AxisHelper (40))
+    this.cameraBody = new THREE.Mesh (new THREE.BoxGeometry (30,24,50), new THREE.MeshBasicMaterial({color:0x232120}));
+    this.lens = new THREE.Mesh (new THREE.CylinderGeometry (5,5,20), new THREE.MeshBasicMaterial({color:0x3d3b3a}));
+    this.lens.position.z = -30;
+    this.lens.rotation.x = Math.PI/2;
+    this.cameraObj.add (this.cameraBody, this.lens);
+
+    this.cameraCase = new THREE.Object3D();
+    this.cameraCase.add (this.cameraObj);
+    this.cameraCase.position.set (x, y, z);
+    scene.add (this.cameraCase);
+    this.cameraCase.rotation.y = ry;
+    this.cameraCase.rotation.x = rx;
+    this.cameraCase.rotation.order = 'YXZ'
+  }
+}
+class Chair{
+	constructor(){
+    this.chair = new THREE.Object3D();
+    this.sit = new THREE.Mesh(new THREE.PlaneGeometry( 50, 150), new THREE.MeshBasicMaterial({color:0x965828}));
+    this.sit.rotation.x = -Math.PI / 2;
+    this.chair.add(this.sit);
+    
+    this.leg1 = new THREE.Mesh(new THREE.BoxGeometry(5, 30, 5), new THREE.MeshBasicMaterial({color:0x965828}));
+    this.chair.add(this.leg1);
+    this.leg1.position.set(20, -15.1, 70);
+    this.leg2 = this.leg1.clone();
+    this.leg2.position.set(-20, -15.1, 70);
+    this.leg3 = this.leg1.clone();
+    this.leg3.position.set(20, -15.1, -70);
+    this.leg4 = this.leg1.clone();
+    this.leg4.position.set(-20, -15.1, -70);
+    this.chair.add(this.leg2, this.leg3, this.leg4);
+    scene.add(this.chair);
+  }
+}
+function toggleCamera() {
+  useCamera1 = !useCamera1;
+}
+
+var scene, renderer, camera;
+var camera1;
+
+init();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  document.body.appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+  camera.position.y = 600
+  camera.position.z = 700;
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+  var gridXZ = new THREE.GridHelper(200, 20, 'red', 'white');
+  //scene.add(gridXZ);
+
+  window.addEventListener('resize', onWindowResize, false);
+
+  //////////////////////////////////////////////////////////////////////////////
+	let loader = new THREE.TextureLoader();
+  loader.crossOrigin = '';
+  texture1 = loader.load('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTh6nEju5y3B8oa_vh-5l2n-p9qo8UHAqXKRpMoUyvgGtE8-pv4');
+  texture = loader.load('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTea8DyoTqC8an_PSiziDlM9yNcn-h2PSw_TCvI4wF4XlInSjLw');
+  //texture1.repeat.set (1, 1);
+//texture.wrapS = texture.wrapT = true;
+	var walls = [];
+
+  var wallSize = [525, 250, 300, 250, 300, 500, 300, 200, 1025, 1025, 600, 825, 100]
+  
+  for(i = 0;i < wallSize.length;i ++){
+  //console.log(wallSize[i][1])
+  	walls[i] = new THREE.Mesh(new THREE.BoxGeometry(wallSize[i], 200, 25), new 	THREE.MeshPhongMaterial({
+    map: texture
+    }))	
+    scene.add(walls[i]);
+    walls[i].position.y = 100;
+  }
+  
+ 	//walls[0] = new THREE.Mesh(new THREE.BoxGeometry(500, 100, 10), new THREE.MeshPhongMaterial())
+  
+  walls[0].position.x = 100;
+  walls[1].position.x = -370;
+  
+  walls[2].rotation.y = Math.PI / 2
+  //walls[2].position.set = (-150, 0, -150)
+  walls[2].position.x = -150;
+  walls[2].position.z = -150;
+  
+  walls[3].position.z = -200
+  walls[3].position.x = -25
+ 
+ 	walls[4].rotation.y = Math.PI / 2
+  walls[4].position.x = 100
+  walls[4].position.z = -250;
+  
+  walls[5].position.x = -250;
+  walls[5].position.z = 100;
+  //walls[0].position.y = 50;
+  
+  walls[6].rotation.y = Math.PI / 2
+  //walls[2].position.set = (-150, 0, -150)
+  walls[6].position.x = 100;
+  walls[6].position.z = 250;
+  
+  walls[7].rotation.y = Math.PI / 2
+  //walls[2].position.set = (-150, 0, -150)
+  walls[7].position.x = -200;
+  walls[7].position.z = 300;
+  
+  walls[8].position.z = 400
+  walls[9].position.z = -400
+  walls[10].rotation.y = Math.PI / 2
+  
+  walls[10].position.x = 500
+  walls[10].position.z = -100
+  walls[11].rotation.y = Math.PI / 2
+  walls[11].position.x = -500
+  
+  walls[12].rotation.y = Math.PI / 2
+  walls[12].position.x = 500
+  walls[12].position.z = 350
+  /////////////////////////////////////////
+  let floor = new THREE.Mesh(new THREE.PlaneGeometry(1025, 825), new THREE.MeshBasicMaterial({
+    side: THREE.DoubleSide,
+    color:0x333333,
+   map: texture1
+  }))
+  scene.add(floor)
+  floor.rotation.x = -Math.PI / 2
+	floor.position.y = -0.1
+  camera1 = new THREE.PerspectiveCamera(60, 1, 1, 1000);
+  camera1.position.set(-100, 160, 0);
+  camera1.lookAt(new THREE.Vector3(0, 60, 0));
+
+  /////////////////////////////////////////
+  var lampPos = [[200, 250], [-300, 250], [-300, -250], [300, -250]]
+  for(i = 0;i < 4;i ++){
+  	lamps[i] = new Lamp(lampPos[i][0], 200, lampPos[i][1]);
+  }
+  
+  var meshPos = [[250, 0], [-350, 100], [-150, -150], [100, -250]]
+  for(i = 0;i < 4;i ++){
+  	meshs[i] = new Mesh(meshPos[i][0], 100, meshPos[i][1]);
+  }
+
+  for(i = 0;i < 4;i ++){
+  	  spotLights[i] = new SpotLight()
+      spotLights[i].spotLight.position.copy(lamps[i].lamp.position);
+      spotLights[i].spotLight.target = meshs[i].mesh;
+  }
+  
+ 	var light = new THREE.AmbientLight(0x404040);
+  scene.add(light);
+	//////////////////////////////////
+    
+  toggleCameras[0] = new Camera(480, 200, 380, Math.PI/5, -Math.PI/8);
+	toggleCameras[1] = new Camera(-480, 200, -380, -Math.PI*4/5, -Math.PI/8);
+  for(i = 0;i < toggleCameras.length;i++){
+  	sCam[i] = new THREE.PerspectiveCamera(50, window.innerWidth / 		window.innerHeight, 25, 1000);
+  ///////////////////////////////////
+  var chair = new Chair();
+	chair.chair.position.set(250, 30.1, -200)
+  chair2 = new Chair();
+  chair2.chair.position.set(-350, 30.1, -200)
+  chair2.chair.rotation.y = Math.PI/ 2
+  }
+	
+  
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function keyframe(t) {
+  var s = ((t - ts) % T) / T;
+  //console.log(s);
+
+  for (var i = 1; i < keys.length; i++) {
+    if (keys[i][0] > s) break;
+  }
+  // take i-1
+  var ii = i - 1;
+  console.log (ii)
+  var a = (s - keys[ii][0]) / (keys[ii + 1][0] - keys[ii][0]);
+  intKey = keys[ii][1] * (1 - a) + keys[ii + 1][1] * a;
+  //console.log (a)
+	return intKey;
+  //console.log (intKey);  // array linear combo?!
+}
+var angle = 0
+function animate() {
+	angle += 0.01;
+  let intkey = keyframe(clock.getElapsedTime());
+  toggleCameras[0].cameraObj.rotation.y = intkey;
+  toggleCameras[1].cameraObj.rotation.y = intkey;
+	for(i = 0;i < lamps.length;i ++){
+  	lamps[i].lamp.lookAt(meshs[i].mesh.position);
+  }
+  requestAnimationFrame(animate);
+  for(i = 0;i < toggleCameras.length;i++){
+  	 sCam[i].matrixWorld.copy (toggleCameras[i].cameraObj.matrixWorld);
+  	 sCam[i].matrixAutoUpdate = false;
+  }
+
+  if(safety == 0){
+  	cam = camera;
+  }
+  else{
+  	cam = sCam[safety-1];
+  } 
+  
+	renderer.render(scene, cam);
+  //let nowCamera = useCamera1 ? camera1 : camera;
+  //renderer.render(scene, nowCamera);
+}
+
+
+
+</script>
+</body>
+
+</html>
